@@ -1,0 +1,48 @@
+# Generate CA private key
+openssl genrsa -out ca/ca.key 4096
+# Generate CA certificate
+openssl req -new -x509 -days 3650 -key ca/ca.key -out ca/ca.crt -subj "/C=US/ST=State/L=City/O=Organization/CN=CA"
+
+# Generate server private key
+openssl genrsa -out server/server.key 4096
+# Generate server certificate signing request
+openssl req -new -key server/server.key -out server/server.csr -subj "/C=US/ST=State/L=City/O=Organization/CN=server"
+# Sign server certificate with CA
+openssl x509 -req -days 3650 -in server/server.csr -CA ca/ca.crt -CAkey ca/ca.key -CAcreateserial -out server/server.crt
+# Generate client private key
+openssl genrsa -out client/client.key 4096
+# Generate client certificate signing request
+openssl req -new -key client/client.key -out client/client.csr -subj "/C=US/ST=State/L=City/O=Organization/CN=client"
+
+# Sign client certificate with CA
+openssl x509 -req -days 3650 -in client/client.csr -CA ca/ca.crt -CAkey ca/ca.key -CAcreateserial -out client/client.crt
+# Create PKCS12 for client (for Java keystore)
+openssl pkcs12 -export -out client/client.p12 -inkey client/client.key -in client/client.crt -password pass:clientpass
+# Create truststore with CA certificate
+keytool -import -trustcacerts -alias ca -file ca/ca.crt -keystore truststore.jks -storepass trustpass -noprompt
+
+# Sign server certificate with CA
+openssl x509 -req -days 3650 -in server/server.csr -CA ca/ca.crt -CAkey ca/ca.key -CAcreateserial -out server/server.crt
+# Create PKCS12 for server (for Java keystore)
+openssl pkcs12 -export -out server/server.p12 -inkey server/server.key -in server/server.crt -password pass:serverpass
+# Create truststore with CA certificate
+keytool -import -trustcacerts -alias ca -file ca/ca.crt -keystore truststore.jks -storepass trustpass -noprompt
+
+/////////////////////////////////////////////////////
+
+openssl genrsa -out ca.key 2048
+openssl req -new -x509 -days 3650 -key ca.key -out ca.crt -subj "/CN=Test CA"
+
+# Create server certificate
+openssl genrsa -out server.key 2048
+openssl req -new -key server.key -out server.csr -subj "/CN=localhost"
+openssl x509 -req -days 3650 -in server.csr -CA ca.crt -CAkey ca.key -set_serial 01 -out server.crt -extfile <(echo "subjectAltName=DNS:localhost")
+
+# Create client certificate
+openssl genrsa -out client.key 2048
+openssl req -new -key client.key -out client.csr -subj "/CN=client"
+openssl x509 -req -days 3650 -in client.csr -CA ca.crt -CAkey ca.key -set_serial 02 -out client.crt
+
+# Create PKCS12 files for Spring Boot
+openssl pkcs12 -export -in server.crt -inkey server.key -out server.p12 -name server -passout pass:password
+openssl pkcs12 -export -in client.crt -inkey client.key -out client.p12 -name client -passout pass:password
